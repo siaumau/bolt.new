@@ -16,6 +16,8 @@ import { cubicEasingFn } from '~/utils/easings';
 import { renderLogger } from '~/utils/logger';
 import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
+import { saveAs } from 'file-saver';
+import JSZip from 'jszip';
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -99,6 +101,36 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
     workbenchStore.resetCurrentDocument();
   }, []);
 
+  const handleDownloadFiles = useCallback(() => {
+    const zip = new JSZip();
+
+    if (!files || typeof files !== 'object') {
+      console.error('Files is not valid:', files);
+      return;
+    }
+
+    Object.entries(files).forEach(([path, fileData]) => {
+      if (fileData && typeof fileData === 'object' && 'content' in fileData) {
+        const normalizedPath = path.replace(/^\/home\/project\//, '');
+        zip.file(normalizedPath, fileData.content);
+      }
+    });
+
+    if (Object.keys(zip.files).length === 0) {
+      toast.error('No files to download');
+      return;
+    }
+
+    zip.generateAsync({ type: "blob" })
+      .then((content) => {
+        saveAs(content, "project-files.zip");
+      })
+      .catch((error) => {
+        console.error('Failed to create zip:', error);
+        toast.error('Failed to create download file');
+      });
+  }, [files]);
+
   return (
     chatStarted && (
       <motion.div
@@ -122,15 +154,24 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                 <Slider selected={selectedView} options={sliderOptions} setSelected={setSelectedView} />
                 <div className="ml-auto" />
                 {selectedView === 'code' && (
-                  <PanelHeaderButton
-                    className="mr-1 text-sm"
-                    onClick={() => {
-                      workbenchStore.toggleTerminal(!workbenchStore.showTerminal.get());
-                    }}
-                  >
-                    <div className="i-ph:terminal" />
-                    Toggle Terminal
-                  </PanelHeaderButton>
+                  <>
+                    <PanelHeaderButton
+                      className="mr-1 text-sm"
+                      onClick={handleDownloadFiles}
+                    >
+                      <div className="i-ph:download" />
+                      Download Files
+                    </PanelHeaderButton>
+                    <PanelHeaderButton
+                      className="mr-1 text-sm"
+                      onClick={() => {
+                        workbenchStore.toggleTerminal(!workbenchStore.showTerminal.get());
+                      }}
+                    >
+                      <div className="i-ph:terminal" />
+                      Toggle Terminal
+                    </PanelHeaderButton>
+                  </>
                 )}
                 <IconButton
                   icon="i-ph:x-circle"
